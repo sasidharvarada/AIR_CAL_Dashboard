@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Indoor air quality nodes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #EEF2F4;
+    --panel: #FFFFFF;
+    --ink: #1E2A33;
+    --muted: #5E6E7A;
+    --line: #D3DCE1;
+    --live: #1F7A50;
+    --live-bg: #E1F2E8;
+    --down: #B42318;
+    --down-bg: #FBE7E5;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 15px;
+    line-height: 1.45;
+  }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 28px 20px 48px; }
+
+  header {
+    display: flex; flex-wrap: wrap; justify-content: space-between;
+    align-items: flex-end; gap: 16px; margin-bottom: 18px;
+  }
+  h1 {
+    font-family: "Barlow Semi Condensed", "Barlow", sans-serif;
+    font-weight: 600; font-size: 30px; margin: 0; letter-spacing: -0.01em;
+  }
+  .sub { color: var(--muted); margin: 4px 0 0; max-width: 60ch; }
+  .summary { text-align: right; }
+  .count {
+    font-family: "Barlow Semi Condensed", "Barlow", sans-serif;
+    font-size: 44px; font-weight: 600; line-height: 1;
+  }
+  .count small { font-size: 18px; color: var(--muted); font-weight: 500; margin-left: 4px; }
+  .updated { color: var(--muted); font-size: 13px; margin-top: 6px; }
+
+  button { font: inherit; cursor: pointer; color: inherit; }
+  button:focus-visible, a:focus-visible { outline: 2px solid #2563A8; outline-offset: 2px; }
+
+  .toolbar {
+    display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+    justify-content: space-between; margin: 6px 0 16px;
+  }
+  .tabs {
+    display: inline-flex; flex-wrap: wrap; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 10px; padding: 3px;
+  }
+  .tabs button {
+    border: 0; background: none; padding: 7px 14px; border-radius: 7px;
+    color: var(--muted); font-weight: 500;
+  }
+  .tabs button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+  .refresh {
+    border: 1px solid var(--line); background: var(--panel);
+    border-radius: 8px; padding: 7px 14px; font-weight: 500;
+  }
+
+  .compare {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; padding: 16px 18px; margin-bottom: 18px;
+  }
+  .compare h2, .card h2 {
+    font-family: "Barlow Semi Condensed", "Barlow", sans-serif;
+    font-weight: 600; font-size: 19px; margin: 0;
+  }
+  .compare p { color: var(--muted); font-size: 13px; margin: 2px 0 0; }
+  .compare .chartbox { height: 280px; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-top: 4px solid var(--c); border-radius: 10px; padding: 14px 16px 12px;
+  }
+  .head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .pill {
+    font-size: 13px; font-weight: 600; padding: 3px 10px; border-radius: 999px;
+    display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+  }
+  .pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .pill.on  { color: var(--live); background: var(--live-bg); }
+  .pill.off { color: var(--down); background: var(--down-bg); }
+  .pill.unk { color: var(--muted); background: #E9EEF1; }
+  .seen { color: var(--muted); font-size: 13px; margin: 4px 0 10px; }
+  .seen a { color: var(--muted); }
+
+  .vals {
+    display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px;
+    border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 8px 0;
+  }
+  .vals .k { font-size: 12px; color: var(--muted); }
+  .vals .v {
+    font-family: "Barlow Semi Condensed", "Barlow", sans-serif;
+    font-weight: 600; font-size: 17px; white-space: nowrap;
+  }
+  .extra { color: var(--muted); font-size: 13px; margin-top: 6px; }
+  .vals .sel .k { color: var(--ink); font-weight: 600; }
+
+  .chartbox { position: relative; height: 150px; margin-top: 10px; }
+  .empty {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    color: var(--muted); font-size: 13px; text-align: center; padding: 0 12px;
+  }
+  .card.inactive .chartbox canvas { opacity: 0.55; }
+
+  @media (max-width: 560px) {
+    .summary { text-align: left; }
+    .vals .v { font-size: 15px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Indoor air quality nodes</h1>
+      <p class="sub">Live view of 7 ThingSpeak channels, last 50 readings each. A node turns inactive when it has not posted for 5 minutes.</p>
+    </div>
+    <div class="summary">
+      <div class="count" id="count">&ndash;</div>
+      <div class="updated" id="updated">Loading data from ThingSpeak&hellip;</div>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <div class="tabs" role="group" aria-label="Choose what to plot" id="tabs"></div>
+    <button class="refresh" id="refresh" type="button">Refresh now</button>
+  </div>
+
+  <section class="compare" aria-labelledby="cmpTitle">
+    <h2 id="cmpTitle"></h2>
+    <p>All nodes on one chart, so you can see if one reads differently from the rest.</p>
+    <div class="chartbox"><canvas id="cmp"></canvas></div>
+  </section>
+
+  <div class="grid" id="grid"></div>
+</div>
+
+<script>
+// ================= SETTINGS =================
+// ThingSpeak field layouts (the nodes run two different firmwares)
+// Layout A - nodes 1, 2, 7: Temp, Humidity, PM2.5, PM10, CO2
+const LAYOUT_A = { temp: "field1", rh: "field2", pm25: "field3", pm10: "field4", co2: "field5" };
+// Layout B - nodes 3, 4, 5, 6: Noise, AQI, PM10, PM2.5, Temp, CO2, Humidity
+const LAYOUT_B = { noise: "field1", aqi: "field2", pm10: "field3", pm25: "field4",
+                   temp: "field5", co2: "field6", rh: "field7" };
+
+const NODES = [
+  { n: 1, id: 3520966, key: "0GO6MAWZL68DX8RJ", fields: LAYOUT_A },
+  { n: 2, id: 3520968, key: "G2F3EDKO751TSBUC", fields: LAYOUT_A },
+  { n: 3, id: 3520969, key: "T4W5AJL0ZABQFGNF", fields: LAYOUT_B },
+  { n: 4, id: 3520972, key: "GWUUE6O5O24YGES4", fields: LAYOUT_B },
+  { n: 5, id: 3520974, key: "PGD0G3KNTYTTXV43", fields: LAYOUT_B },
+  { n: 6, id: 3521004, key: "1GEDE7ETRV8Q01GI", fields: LAYOUT_B },
+  { n: 7, id: 3521024, key: "5P2ZC8LSDQ072HEL", fields: LAYOUT_A },
+];
+
+// Readings shown for every node (tabs + value row)
+const METRICS = [
+  { k: "temp", name: "Temperature", short: "Temp",  unit: "°C",    dp: 1 },
+  { k: "rh",   name: "Humidity",    short: "RH",    unit: "%",     dp: 0 },
+  { k: "pm25", name: "PM2.5",       short: "PM2.5", unit: "µg/m³", dp: 1 },
+  { k: "pm10", name: "PM10",        short: "PM10",  unit: "µg/m³", dp: 1 },
+  { k: "co2",  name: "CO2",         short: "CO2",   unit: "ppm",   dp: 0 },
+];
+
+const COLORS = ["#2563A8", "#1F7A50", "#B7791F", "#7E3FA6", "#C2410C", "#0E7C86", "#5B6770"];
+const INACTIVE_MS = 5 * 60 * 1000;   // inactive if no post for 5 minutes
+const REFRESH_MS  = 30 * 1000;       // fetch new data every 30 s
+const RESULTS     = 50;              // last 50 values
+
+// ================= STATE =================
+let metric = 0;
+const state = {};      // per node: { feeds, error }
+const charts = {};     // per node Chart.js instance
+let cmpChart = null;
+
+// ================= HELPERS =================
+const num = v => { const x = parseFloat(v); return Number.isFinite(x) ? x : null; };
+const hm = ms => new Date(ms).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false });
+const full = ms => new Date(ms).toLocaleString("en-IN", {
+  day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+function ago(ms) {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return `${s} s ago`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m} min ago`;
+  const h = Math.round(m / 60);
+  if (h < 48) return `${h} h ago`;
+  return `${Math.round(h / 24)} days ago`;
+}
+function points(feeds, f) {
+  return feeds
+    .map(r => ({ x: Date.parse(r.created_at), y: num(r[f]) }))
+    .filter(p => p.y !== null && Number.isFinite(p.x));
+}
+function latest(feeds, f) {
+  for (let i = feeds.length - 1; i >= 0; i--) {
+    const v = num(feeds[i][f]);
+    if (v !== null) return v;
+  }
+  return null;
+}
+
+// ================= CHART CONFIG =================
+function chartOptions(showLegend) {
+  return {
+    animation: false,
+    maintainAspectRatio: false,
+    parsing: false,
+    interaction: { mode: "nearest", intersect: false },
+    plugins: {
+      legend: { display: showLegend, position: "bottom",
+                labels: { boxWidth: 12, boxHeight: 2, color: "#1E2A33", font: { family: "Barlow" } } },
+      tooltip: {
+        callbacks: {
+          title: items => full(items[0].parsed.x),
+          label: i => {
+            const m = METRICS[metric];
+            const who = showLegend ? `${i.dataset.label}: ` : "";
+            return `${who}${i.parsed.y.toFixed(m.dp)} ${m.unit}`;
+          },
+        },
+      },
+    },
+    scales: {
+      x: { type: "linear", grid: { display: false },
+           ticks: { callback: v => hm(v), maxTicksLimit: 6, color: "#5E6E7A", font: { family: "Barlow" } } },
+      y: { grid: { color: "#E7ECEF" },
+           ticks: { maxTicksLimit: 5, color: "#5E6E7A", font: { family: "Barlow" } } },
+    },
+  };
+}
+
+// ================= BUILD PAGE =================
+function buildTabs() {
+  const tabs = document.getElementById("tabs");
+  METRICS.forEach((m, i) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = m.name;
+    b.setAttribute("aria-pressed", i === metric ? "true" : "false");
+    b.addEventListener("click", () => {
+      metric = i;
+      tabs.querySelectorAll("button").forEach((x, j) => x.setAttribute("aria-pressed", j === i ? "true" : "false"));
+      render();
+    });
+    tabs.appendChild(b);
+  });
+}
+
+function buildCards() {
+  const grid = document.getElementById("grid");
+  NODES.forEach((node, i) => {
+    const card = document.createElement("article");
+    card.className = "card";
+    card.id = `node-${node.n}`;
+    card.style.setProperty("--c", COLORS[i]);
+    card.innerHTML = `
+      <div class="head">
+        <h2>Node ${node.n}</h2>
+        <span class="pill unk" data-pill>Checking</span>
+      </div>
+      <div class="seen" data-seen>Channel ${node.id}</div>
+      <div class="vals" data-vals>
+        ${METRICS.map(m => `<div data-m="${m.k}"><div class="k">${m.short}</div><div class="v">&ndash;</div></div>`).join("")}
+      </div>
+      ${node.fields.noise ? `<div class="extra" data-extra>Noise &ndash; dBA, AQI &ndash;</div>` : ""}
+      <div class="chartbox">
+        <canvas aria-label="Node ${node.n} last ${RESULTS} readings"></canvas>
+        <div class="empty" data-empty hidden></div>
+      </div>`;
+    grid.appendChild(card);
+
+    charts[node.n] = new Chart(card.querySelector("canvas"), {
+      type: "line",
+      data: { datasets: [{ data: [], borderColor: COLORS[i], backgroundColor: COLORS[i] + "1F",
+                           fill: true, pointRadius: 0, pointHoverRadius: 3, borderWidth: 2, tension: 0.25 }] },
+      options: chartOptions(false),
+    });
+  });
+
+  cmpChart = new Chart(document.getElementById("cmp"), {
+    type: "line",
+    data: { datasets: NODES.map((node, i) => ({
+      label: `Node ${node.n}`, data: [], borderColor: COLORS[i], backgroundColor: COLORS[i],
+      pointRadius: 0, pointHoverRadius: 3, borderWidth: 2, tension: 0.25 })) },
+    options: chartOptions(true),
+  });
+}
+
+// ================= DATA =================
+async function fetchNode(node) {
+  const url = `https://api.thingspeak.com/channels/${node.id}/feeds.json?api_key=${node.key}&results=${RESULTS}`;
+  try {
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    if (json === -1 || !json.feeds) throw new Error("wrong read key or channel");
+    state[node.n] = { feeds: json.feeds, error: null };
+  } catch (e) {
+    // keep old data if we had it, but remember the error
+    state[node.n] = { feeds: state[node.n]?.feeds || [], error: e.message };
+  }
+}
+
+async function refreshAll() {
+  const btn = document.getElementById("refresh");
+  btn.disabled = true;
+  btn.textContent = "Refreshing…";
+  await Promise.all(NODES.map(fetchNode));
+  btn.disabled = false;
+  btn.textContent = "Refresh now";
+  document.getElementById("updated").textContent =
+    `Updated ${hm(Date.now())}. Refreshes every ${REFRESH_MS / 1000} s.`;
+  render();
+}
+
+// ================= RENDER =================
+function render() {
+  const now = Date.now();
+  const m = METRICS[metric];
+  let active = 0;
+
+  document.getElementById("cmpTitle").textContent = `${m.name} (${m.unit}), all nodes`;
+
+  NODES.forEach((node, i) => {
+    const s = state[node.n];
+    const card = document.getElementById(`node-${node.n}`);
+    const pill = card.querySelector("[data-pill]");
+    const seen = card.querySelector("[data-seen]");
+    const empty = card.querySelector("[data-empty]");
+    const link = `<a href="https://thingspeak.mathworks.com/channels/${node.id}" target="_blank" rel="noopener">channel ${node.id}</a>`;
+
+    let pts = [];
+    if (!s) {
+      pill.className = "pill unk"; pill.textContent = "Checking";
+    } else if (s.feeds.length === 0) {
+      pill.className = "pill off"; pill.textContent = "Inactive";
+      seen.innerHTML = s.error
+        ? `Could not load ${link}: ${s.error}`
+        : `No data posted yet to ${link}`;
+      card.classList.add("inactive");
+    } else {
+      const last = Date.parse(s.feeds[s.feeds.length - 1].created_at);
+      const isActive = now - last <= INACTIVE_MS;
+      if (isActive) active++;
+      pill.className = isActive ? "pill on" : "pill off";
+      pill.textContent = isActive ? "Active" : "Inactive";
+      card.classList.toggle("inactive", !isActive);
+      seen.innerHTML = `Last post ${ago(now - last)} (${full(last)}), ${link}` +
+                       (s.error ? `. Last refresh failed: ${s.error}` : "");
+      pts = points(s.feeds, node.fields[m.k]);
+
+      METRICS.forEach(mm => {
+        const cell = card.querySelector(`[data-m="${mm.k}"]`);
+        const v = latest(s.feeds, node.fields[mm.k]);
+        cell.querySelector(".v").textContent = v === null ? "–" : v.toFixed(mm.dp);
+        cell.classList.toggle("sel", mm.k === m.k);
+      });
+
+      const extra = card.querySelector("[data-extra]");
+      if (extra) {
+        const nz = latest(s.feeds, node.fields.noise), aq = latest(s.feeds, node.fields.aqi);
+        extra.textContent = `Noise ${nz === null ? "–" : nz.toFixed(1)} dBA, AQI ${aq === null ? "–" : aq.toFixed(0)}`;
+      }
+    }
+
+    // node chart
+    const ch = charts[node.n];
+    ch.data.datasets[0].data = pts;
+    ch.options.scales.x.min = pts.length ? pts[0].x : undefined;
+    ch.options.scales.x.max = pts.length ? pts[pts.length - 1].x : undefined;
+    ch.update("none");
+    card.querySelector("canvas").style.visibility = pts.length ? "visible" : "hidden";
+    empty.hidden = pts.length > 0;
+    if (pts.length === 0) empty.textContent = s ? `No ${m.name} values in the last ${RESULTS} posts` : "Loading…";
+
+    // comparison chart
+    cmpChart.data.datasets[i].data = pts;
+  });
+
+  const xs = cmpChart.data.datasets.flatMap(d => d.data.map(p => p.x));
+  cmpChart.options.scales.x.min = xs.length ? Math.min(...xs) : undefined;
+  cmpChart.options.scales.x.max = xs.length ? Math.max(...xs) : undefined;
+  cmpChart.update("none");
+  document.getElementById("count").innerHTML = `${active}<small>of ${NODES.length} active</small>`;
+}
+
+// ================= START =================
+buildTabs();
+buildCards();
+refreshAll();
+setInterval(refreshAll, REFRESH_MS);
+setInterval(render, 10 * 1000);   // keep "x min ago" and status fresh
+document.getElementById("refresh").addEventListener("click", refreshAll);
+</script>
+</body>
+</html>
